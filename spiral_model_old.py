@@ -11,7 +11,7 @@ I = 1. # fiducial current amplitude in the spiral, doesn't actually matter
 
 def integrate(f, xmin, xmax, n=1000):
     dx = (xmax - xmin) / n
-    x = np.arange(xmin, xmax + dx, dx)
+    x = np.arange(xmin, xmax, dx)
     return dx * np.sum(f(x))
 
 class Spiral:
@@ -23,7 +23,6 @@ class Spiral:
         self.nturns = (rmax - rmin) / pitch
         self.order = order
         self.c_eff = c / np.sqrt(eps)
-        self.eps = eps
 
         self.fill_ratio = (rmax - rmin) / (rmax + rmin)
 
@@ -37,7 +36,7 @@ class Spiral:
         #self.r_eval = np.sqrt(np.random.uniform(1.001 * self.rmin**2, 0.999 * self.rmax**2, self.n_eval))
         #self.theta_eval = np.random.uniform(0., 2. * pi, self.n_eval)
         self.theta_eval = np.sqrt(np.random.uniform(0., (2. * pi * self.nturns)**2, self.n_eval))
-        self.r_eval = self.rmax * (1. - self.alpha * self.theta_eval) + 0.5 * self.pitch
+        self.r_eval = self.rmax * (1. - self.alpha * self.theta_eval)
 
         self.omega = None
         self.sigma_omega = None
@@ -48,10 +47,7 @@ class Spiral:
 
     def eval_psi(self, s, coeffs):
         psi = 0.
-        #r = self.rmax * (1. - self.alpha * self.phi(s))
-        #nu = ((r - self.rmin) / (self.rmax - self.rmin))**2
         for n, c in enumerate(coeffs):
-            #psi += c * np.sin(pi * (n + 1.) * nu)
             psi += c * np.sin(pi * (n + 1.) * s / self.length)
         return psi
 
@@ -61,10 +57,9 @@ class Spiral:
         dphi_ds = lambda s: 1. / np.sqrt(self.alpha**2 * self.rmax**2 + rho(s))
         k = omega / self.c_eff
         
-        integrand_radial = lambda s: (1. / R(s)) * np.exp(-1.j * k * R(s)) * self.eval_psi(s, coeffs) * dphi_ds(s) * (rho(s) * np.sin(theta - self.phi(s)) - self.rmax * self.alpha * np.cos(theta - self.phi(s)))
+        integrand_radial = lambda s: np.exp(-1.j * k * R(s)) * self.eval_psi(s, coeffs) * dphi_ds(s) * (rho(s) * np.sin(theta - self.phi(s)) - self.rmax * self.alpha * np.cos(theta - self.phi(s)))
         
         n = int(4. * self.length / self.pitch)
-        #import matplotlib.pyplot as plt; s = np.linspace(0., self.length, n); plt.scatter(R(s), integrand_radial(s), s=2.); plt.show(); exit()
         A_r = integrate(integrand_radial, 0., self.length, n=n)
         return A_r
 
@@ -74,20 +69,18 @@ class Spiral:
         dphi_ds = lambda s: 1. / np.sqrt(self.alpha**2 * self.rmax**2 + rho(s))
         k = omega / self.c_eff
     
-        integrand_angular = lambda s: (1. / R(s)) * np.exp(-1.j * k * R(s)) * self.eval_psi(s, coeffs) * dphi_ds(s) * (rho(s) * np.cos(theta - self.phi(s)) - self.rmax * self.alpha * np.sin(theta - self.phi(s)))
+        integrand_angular = lambda s: np.exp(-1.j * k * R(s)) * self.eval_psi(s, coeffs) * dphi_ds(s) * (rho(s) * np.cos(theta - self.phi(s)) - self.rmax * self.alpha * np.sin(theta - self.phi(s)))
     
         n = int(4. * self.length / self.pitch)
         A_theta = integrate(integrand_angular, 0., self.length, n=n)
         return A_theta
 
     def electric_field(self, r, theta, omega, coeffs):
-        dr = 1e-2 * self.pitch
+        dr = 1e-4 * self.rmax
         E_r = derivative(lambda r1: (1. / r1) * derivative(lambda r2: r2 * self.vector_potential_radial(r2, theta, omega, coeffs), r1, dr), r, dr)
-        #E_r = derivative(lambda r1: self.vector_potential_radial(r1, theta, omega, coeffs), r, dr, n=2)
         E_r /= (1.j * omega * epsilon_0 * mu_0)
 
         E_theta = -1.j * omega * self.vector_potential_angular(r, theta, omega, coeffs)
-        #print(np.abs(self.rmax * self.alpha * E_r), np.abs(r * E_theta))
 
         return E_r, E_theta
 
@@ -95,14 +88,10 @@ class Spiral:
         omega = params[0] * 1e9
         coeffs = params[1:]
         L = 0.
-        y = []
         for _theta, _r in zip(self.theta_eval, self.r_eval):
             E_r, E_theta = self.electric_field(_r, _theta, omega, coeffs)
             temp = self.rmax * self.alpha * E_r + _r * E_theta
-            y.append(np.abs(temp))
-            L += np.abs(temp)
-        print(params[0])
-        import matplotlib.pyplot as plt; plt.scatter(self.r_eval, y); plt.show()
+            L += np.real(temp * np.conj(temp))
         return L
 
     ### Eq. (3) in https://link.aps.org/doi/10.1103/PhysRevApplied.14.044055

@@ -5,7 +5,7 @@ import sys
 from spiral_model import Spiral
 
 rmax = 41e-6
-rmin_array = np.linspace(0.05 * rmax, 0.25 * rmax, 20)
+rmin_array = np.linspace(0.05 * rmax, 0.25 * rmax, 30)
 pitch = 0.5e-6
 order = 4
 
